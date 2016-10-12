@@ -326,3 +326,104 @@ G1收集器大概分为几个阶段：
 [GC (Allocation Failure) 2016-09-30T15:39:17.515-0800: [DefNew: 5549K->475K(9216K), 0.0038713 secs] 5549K->4571K(19456K), 0.0039046 secs] [Times: user=0.00 sys=0.00, real=0.00 secs]
 
 [垃圾回收的类型 (Allocation Failure) 发生的时间: [发生的区域: 回收前已使用大小->回收后使用大小(总的大小), 所用时间] 堆会收钱已使用大小->堆回收后已使用大小(堆总大小), 所用时间] [Times: user=0.00 sys=0.00, real=0.00 secs]
+
+
+###### 内存回收与分配策略
+- 对象优先分配在Eden区
+  大多数情况下对象都是分配在Eden区，当Eden区没有足够的空间进行分配时，虚拟机将发起一次Mirror GC。
+- 大对象直接进入老年代
+  所谓的大对象是指需要大量连续内存空间的Java对象。比较典型的就是很长的字符串及数组。虚拟机提供了一个-XX:PretenureSizeThreshold参数，令大于这个设置值的对象直接在老年代分配。 此参数只对Serial和ParNew两个收集器有效。
+- 长期存活的对象进入老年代
+  虚拟机为每个对象定义了一个对象年龄(Age)计数器。如果对象在Eden出生，并且经历过一次Mirror GC后仍然存活，并且Survivor能够容纳，就将对象的年龄设为1，之后每熬过一次Mirror GC年龄加1，当年龄值达到默认值15时，就会被晋升到老年代。这个值可以通过+XX:MaxTenuringThreshold设置。
+- 动态对象年龄判断
+  为了更好的适应不同程序的内存情况， 虚拟机并不是永远的要求对象的年龄必须达到MaxTenuringThreshold才能晋升到老年代，如果Survivor空间中相同年龄的所有对象的大小总和大于Survivor空间的一半时，年龄大于等于该年龄的对象直接进入老年代。
+- 空间分配担保
+  在发生Mirror之前，虚拟机会先检查老年代的最大连续空间是否大于新生代所有对象的总空间，如果是，则Mirror GC可以安全进行，如果不成立，会检查HandlePromotionFailure是否允许担保失败，如果允许，继续检查老年代最大可用空间是否大于历次晋升到老年代的平均大小，如果大于，则尝试Mirror GC。如果小于，则此时进行一次Full GC。大部分情况下会将HandlePromotionFailure开关打开，避免Full GC过于频繁。在JDK1.6之后HandlePromotionFailure参与不再其作用。
+
+
+
+##### 虚拟机性能监控和故障处理工具
+
+###### jps 虚拟机进程状况工具
+JVM Process Status Tool 显示指定系统内所有HotSpot虚拟机进程。类似于ps命令。LVMID和操作系统进程ID(PID)是一致的.
+
+jps命令格式：
+jps [ options ] [ hostid ]  
+
+jps的常用选项
+- -q 只输出LVMID，省略主类的名称
+- -m 虚拟机进程启动时传递给主类main()函数的参数
+- -l 输出主类的全名，如果进程执行的是jar包，则输出jar包的路径
+- -v 输出虚拟机进行启动时的JVM参数
+
+
+###### jstat 虚拟机统计信息监视工具
+jstat(JVM Statistics Monitoring Tool)是用于监视虚拟机各种运行状态的命令行工具。它可以显示本地或远程虚拟机中的类装载，内存，垃圾回收，JIT编译等运行数据。
+
+jstat命令格式:
+jstat [ option vmid [ interval[s|ms] [ count ] ]
+
+如果是本地虚拟机进程VMID和LVMID是一致的，如果是远程虚拟机进程，则VMID的格式应当是[protocol:][//]lvmid[@hostname[:port]/servername]
+
+参数interval和count代表查询的间隔和次数, option代表用户希望查询到的虚拟机信息。主要有三类： 类装载，垃圾收集和运行时编译状况。
+
+| 选项 | 作用 |
+|--|--|
+|-class|监视类装载，卸载数量,总空间，及类装载和卸载所耗费的时间|
+|-gc|监视Java堆区状况，包括Eden区，两个Survivor区，老年代区，永久代区等的容量。已用空间，GC合计时间等|
+|-gccapacit|监视内容基本与-gc相同，但是输出内容主要关注Java堆各个区使用到等最大，最小空间。|
+|-gcutil|监视内容基本与-gc相同，但是输出内容主要关注已使用空间占总空间等百分比|
+|-gccause|与-gcutil功能一样，但是会额外输出导致上一次GC等原因|
+|-gcnew|监视新生代GC情况|
+|-gcnewcapacity|监视内容和-gcnew基本相同，输出主要关注使用到等最大，最小空间|
+|-gcold|监视老年代GC状况|
+|-gcoldcapacity|监视内容基本与-gcold相同，输出主要关注使用到的最大，最小空间。|
+|-gcpermcapacity|输出永久代的最大，最小空间|
+|-compiler|输出JIT编译过的方法，耗时信息等|
+|－printcompilation|输出已经被JIT编译等方法|
+
+
+###### jinfo Java配置信息
+jinfo(Configuration Info for Java)的作用就是实时的查看和调整虚拟机的各项参数。
+
+jinfo命令格式:
+info [ option ] pid
+
+
+######jmap Java内存映像工具
+jmap(Memory Map for Java)用于生成堆转储快照。 一般称为heapdump 或dump。如果不使用jmap，可以在启动JVM时添加-XX:+HeapDumpOnOutOfMemeoryError参数。或者通过-XX:+HeapDumpOnCtrlBreak参数使用CTRL+BREAK键让虚拟机产生dump(1.6以后这个参数不存在了). 或者通过kill -3命令发送退出信号"吓唬"一下虚拟机，也能拿到dump文件
+
+jmap的作用不仅是获取dump文件，它还可以查询finalize队列，Java堆和永久代的详细信息。如空间使用率，使用的哪种收集器。
+
+jmap命令格式:
+jmap [ option ] pid
+
+option选项的值如下
+
+|选项|作用|
+|--|--|
+|-dump|生成Java堆快照, 格式为-dump:[live,] format=b, file=filename 其中live子参数表示是否只dump出存活的对象|
+|-finalizerinfo|显示F-Queue中等待Finalizer线程执行finalize方法的对象。|
+|-heap|显示Java堆的详细信息，如使用了哪种回收器，参数配置，分代情况等|
+|-histo|只显示堆中的对象统计信息，包括类，实例数量，合计容量。|
+|-permstat|以ClassLoader为统计口径显示永久代内存情况。|
+|-F|当虚拟机进程对-dump没有响应时，可以使用这个选项强制生成dump快照。|
+
+
+###### jhat 虚拟机堆转储快照分析工具
+jhat(JVM Heap Analysis Tool)命令与jmap搭配使用,来分析jmap生成对快照。jhat内置了一个微型html服务器，生成dump文件的分析结果后，可以在浏览器中查看。
+
+
+###### jstack Java堆栈跟踪工具
+jstack(Stack Trace for Java)用于生成当前时刻虚拟机线程的快照。一般称为threaddump或者javacore。线程快照就是当前虚拟机内每一个正在执行的线程方法堆栈的集合。生成快照的主要目的是定位线程出现长时间停顿的原因。比如线程间死锁，死循环，或者请求外部资源等待时间过长等。线程出现停顿时，通过jstack查看各个线程等调用堆栈，就可以知道没有响应的线程在做什么事情或者等待什么资源。
+
+jstack命令格式
+jstack [ option ] pid
+
+option选项的值
+
+|选项|作用|
+|-|-|
+|-F|当正常的输出请求不被响应时，强制输出线程堆栈|
+|-l|除堆栈外，显示关于锁的信息。|
+|-m|如果调用到本地方法，可以先吃C/C++的堆栈信息|
