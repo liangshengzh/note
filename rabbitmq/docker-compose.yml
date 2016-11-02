@@ -1,0 +1,32 @@
+rabbitmq1:
+  image: rabbitmq:management
+  hostname: rabbitmq1
+  volumes:
+    - ./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie
+  ports:
+    - "5672:5672"
+    - "15672:15672"
+
+rabbitmq2:
+  image: rabbitmq:management
+  hostname: rabbitmq2
+  volumes:
+    - ./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie
+  links:
+    - rabbitmq1
+  ports:
+    - "5673:5672"
+    - "15673:15672"
+
+
+rabbitmq3:
+  image: rabbitmq:management
+  hostname: rabbitmq3
+  volumes:
+    - ./.erlang.cookie:/var/lib/rabbitmq/.erlang.cookie
+  links:
+    - rabbitmq1
+    - rabbitmq2
+  ports:
+    - "5674:5672"
+    - "15674:15672"
