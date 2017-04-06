@@ -1,0 +1,4 @@
+
+
+
+CachingConnectionFactory支持支持对channel对cache。cache size并不是一个限制，而是之后这么多项会被cahche起来。

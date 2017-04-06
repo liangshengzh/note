@@ -1,3 +1,5 @@
+import java.util.Random;
+
 /**
  * Created by zhong on 2016/10/20.
  */
@@ -10,6 +12,7 @@ public class Main {
         Integer e = 321;
         Integer f = 321;
         Long g = 3L;
+
 
         System.out.println(c == d);
         System.out.println(e == f);

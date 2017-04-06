@@ -40,5 +40,9 @@ public class App {
         template.convertAndSend("myExchange", "abc.red", "Hello Red");
         Thread.sleep(100);
         container.stop();
+
+
+
+
     }
 }
